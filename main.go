@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"slices"
 	"strconv"
 	"unicode"
 )
@@ -12,6 +11,7 @@ import (
 type numPos struct {
 	begin int
 	end   int
+	value int
 }
 
 func checksOut(character rune) bool {
@@ -21,8 +21,8 @@ func checksOut(character rune) bool {
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 	sum := 0
-	prev := []rune(".......................................................................................................................................................................................................................")
 	var prevPositions []numPos
+	prevSymbols := make([]bool, 1000)
 
 	for scanner.Scan() {
 		text := scanner.Text()
@@ -30,66 +30,60 @@ func main() {
 			break
 		}
 		text = "." + text + "."
-		runes := []rune(text)
+		symbols := make([]bool, len(text))
+		var positions []numPos
 		checkingNum := false
 		currentPos := 0
-		var positions []numPos
-		var foundSims []int
-
-		for i := 0; i < len(runes); i++ {
-			if unicode.IsDigit(runes[i]) {
+	posLoop:
+		for i, v := range text {
+			if unicode.IsDigit(v) {
 				if !checkingNum {
 					currentPos = i
 					checkingNum = true
 				}
 
 			} else {
+				if v != '.' && !unicode.IsLetter(v) {
+					symbols[i] = true
+				}
 				if checkingNum {
-					positions = append(positions, numPos{begin: currentPos, end: i - 1})
+					end := i - 1
 					checkingNum = false
+					value, err := strconv.Atoi(text[currentPos:i])
+					if err != nil {
+						continue
+					}
+					if symbols[i] {
+						sum += value
+						continue
+					}
+					if symbols[currentPos-1] {
+						sum += value
+						continue
+					}
+					for j := currentPos - 1; j <= end+1; j++ {
+						if prevSymbols[j] {
+							sum += value
+							continue posLoop
+						}
+					}
+					positions = append(positions, numPos{begin: currentPos, end: end, value: value})
 				}
-				if checksOut(runes[i]) {
-					foundSims = append(foundSims, i)
-				}
+
 			}
 
 		}
-		for _, s := range foundSims {
-			fmt.Println(runes[s])
-		}
-	prevPos:
-		for _, n := range prevPositions {
-			num, err := strconv.Atoi(string(prev[n.begin : n.end+1]))
-			if err != nil {
-				continue
-			}
-			for i := n.begin - 1; i <= n.end+1; i++ {
-				if slices.Contains(foundSims, i) {
-					sum += num
-					continue prevPos
+	prevLoop:
+		for _, pos := range prevPositions {
+			for i := pos.begin - 1; i <= pos.end+1; i++ {
+				if symbols[i] {
+					sum += pos.value
+					continue prevLoop
 				}
 			}
 		}
-	posIter:
-		for _, n := range positions {
-			num, err := strconv.Atoi(string(runes[n.begin : n.end+1]))
-			if err != nil {
-				continue
-			}
-			for i := n.begin; i <= n.end; i++ {
-				if checksOut(prev[i]) {
-					sum += num
-					continue posIter
-				}
-			}
-			if checksOut(runes[n.begin-1]) || checksOut(prev[n.begin-1]) || checksOut(runes[n.end+1]) || checksOut(prev[n.end+1]) {
-				sum += num
-				continue posIter
-			}
-			prevPositions = append(prevPositions, n)
-
-		}
-		prev = runes
+		prevSymbols = symbols
+		prevPositions = positions
 	}
 
 	fmt.Println(sum)
